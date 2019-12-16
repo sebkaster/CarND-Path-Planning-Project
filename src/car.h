@@ -57,7 +57,7 @@ public:
     /* member functions */
     void determineLane();
 
-    std::tuple<double, double> predictFutureSates(size_t num_time_steps, double time_step_size = 0.02);
+    std::tuple<double, double> predictFutureSates(size_t const& num_time_steps, double time_step_size = 0.02);
 
 private:
 

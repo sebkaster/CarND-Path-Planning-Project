@@ -18,7 +18,7 @@ void Car::determineLane() {
     }
 }
 
-std::tuple<double, double> Car::predictFutureSates(size_t num_time_steps, double time_step_size)
+std::tuple<double, double> Car::predictFutureSates(size_t const& num_time_steps, double time_step_size)
 {
     double max_acc = 10.0;
     double max_dec = -10.0;

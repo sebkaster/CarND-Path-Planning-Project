@@ -108,7 +108,7 @@ int main() {
                     double d, d_d, d_dd;
 
                     // use default values if not enough previous path points
-                    if (previous_path_x.size() < 5) {
+                    if (previous_path_x.size() < 4) {
                         pos_x = car_x;
                         pos_y = car_y;
                         angle = deg2rad(car_yaw);
@@ -121,8 +121,30 @@ int main() {
                     } else {
                         std::cout << "to be implemented" << std::endl;
 
-                        // calculate ego vehicle parameters based on the last three coordinates of the car
+                        // calculate ego vehicle parameters based on the last four coordinates
+
+                        double pos_x_1 = previous_path_x[previous_path_x.size() - 1];
+                        double pos_x_2 = previous_path_x[previous_path_x.size() - 2];
+                        double pos_x_3 = previous_path_x[previous_path_x.size() - 3];
+                        double pos_x_4 = previous_path_x[previous_path_x.size() - 4];
+
+                        double pos_y_1 = previous_path_y[previous_path_x.size() - 1];
+                        double pos_y_2 = previous_path_y[previous_path_x.size() - 2];
+                        double pos_y_3 = previous_path_y[previous_path_x.size() - 3];
+                        double pos_y_4 = previous_path_y[previous_path_x.size() - 4];
+
+                        auto coords_1 = getFrenet(pos_x_1, pos_y_1, atan2(pos_y_1-pos_y_2,pos_x_1-pos_x_2), map_waypoints_x, map_waypoints_y);
+                        auto coords_2 = getFrenet(pos_x_2, pos_y_2, atan2(pos_y_2-pos_y_3,pos_x_2-pos_x_3), map_waypoints_x, map_waypoints_y);
+                        auto coords_3 = getFrenet(pos_x_3, pos_y_3, atan2(pos_y_3-pos_y_4,pos_x_3-pos_x_4), map_waypoints_x, map_waypoints_y);
+
+                        s_d = (coords_1[0] - coords_2[0]) / time_step_size;
+                        s_dd = (s_d - (coords_2[0] - coords_3[0]) / time_step_size) / (2.0 * time_step_size);
+
+                        d_d = (coords_1[1] - coords_2[1]) / time_step_size;
+                        d_dd = (d_d - (coords_2[1] - coords_3[1]) / time_step_size) / (2.0 * time_step_size);
                     }
+
+                    Car ego_car(s, s_d, s_dd, d, d_d, d_dd);
 
 
                     std::vector<Car> other_traffic_participants;
@@ -132,8 +154,6 @@ int main() {
                         new_car.determineLane();
                         auto [ closest_s, furthest_s ] = new_car.predictFutureSates(previous_path_x.size());
                         other_traffic_participants.emplace_back(std::move(new_car));
-
-
                     }
 
 
