@@ -7,15 +7,19 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "helpers.h"
 #include "json.hpp"
+#include "spline.h"
+
+#include "car.h"
 
 // for convenience
 using nlohmann::json;
 using std::string;
 using std::vector;
 
+const double time_step_size = 0.02;
+
 int main() {
     uWS::Hub h;
-
     // Load up map values for waypoint's x,y,s and d normalized normal vectors
     vector<double> map_waypoints_x;
     vector<double> map_waypoints_y;
@@ -50,7 +54,13 @@ int main() {
         map_waypoints_dy.push_back(d_y);
     }
 
-    h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
+    // Car's lane. Starting at middle lane.
+    int lane = 1;
+
+    // Reference velocity.
+    double ref_vel = 0.0; // mph
+
+    h.onMessage([&ref_vel, &lane, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
                         &map_waypoints_dx, &map_waypoints_dy]
                         (uWS::WebSocket <uWS::SERVER> ws, char *data, size_t length,
                          uWS::OpCode opCode) {
@@ -80,6 +90,8 @@ int main() {
                     // Previous path data given to the Planner
                     auto previous_path_x = j[1]["previous_path_x"];
                     auto previous_path_y = j[1]["previous_path_y"];
+
+
                     // Previous path's end s and d values
                     double end_path_s = j[1]["end_path_s"];
                     double end_path_d = j[1]["end_path_d"];
@@ -90,40 +102,44 @@ int main() {
 
                     json msgJson;
 
-                    vector<double> next_x_vals;
-                    vector<double> next_y_vals;
-                    //
-                    double pos_x;
-                    double pos_y;
+                    double pos_x, pos_y;
                     double angle;
-                    int path_size = previous_path_x.size();
+                    double s, s_d, s_dd;
+                    double d, d_d, d_dd;
 
-                    for (int i = 0; i < path_size; ++i) {
-                        next_x_vals.push_back(previous_path_x[i]);
-                        next_y_vals.push_back(previous_path_y[i]);
-                    }
-
-                    if (path_size == 0) {
+                    // use default values if not enough previous path points
+                    if (previous_path_x.size() < 5) {
                         pos_x = car_x;
                         pos_y = car_y;
                         angle = deg2rad(car_yaw);
+                        s = car_s;
+                        d = car_d;
+                        s_d = car_speed;
+                        d_d = 0;
+                        s_dd = 0;
+                        d_dd = 0;
                     } else {
-                        pos_x = previous_path_x[path_size - 1];
-                        pos_y = previous_path_y[path_size - 1];
+                        std::cout << "to be implemented" << std::endl;
 
-                        double pos_x2 = previous_path_x[path_size - 2];
-                        double pos_y2 = previous_path_y[path_size - 2];
-                        angle = atan2(pos_y - pos_y2, pos_x - pos_x2);
+                        // calculate ego vehicle parameters based on the last three coordinates of the car
                     }
 
-                    double dist_inc = 0.5;
-                    for (int i = 0; i < 50 - path_size; ++i) {
-                        next_x_vals.push_back(pos_x + (dist_inc) * cos(angle + (i + 1) * (pi() / 100)));
-                        next_y_vals.push_back(pos_y + (dist_inc) * sin(angle + (i + 1) * (pi() / 100)));
-                        pos_x += (dist_inc) * cos(angle + (i + 1) * (pi() / 100));
-                        pos_y += (dist_inc) * sin(angle + (i + 1) * (pi() / 100));
+
+                    std::vector<Car> other_traffic_participants;
+                    other_traffic_participants.reserve(sensor_fusion.size());
+                    for (auto const &elem : sensor_fusion) {
+                        Car new_car(elem[5], elem[3], elem[6], elem[4]);
+                        new_car.determineLane();
+                        auto [ closest_s, furthest_s ] = new_car.predictFutureSates(previous_path_x.size());
+                        other_traffic_participants.emplace_back(std::move(new_car));
+
+
                     }
-                    //
+
+
+                    std::vector<double> next_x_vals;
+                    std::vector<double> next_y_vals;
+
                     msgJson["next_x"] = next_x_vals;
                     msgJson["next_y"] = next_y_vals;
 
@@ -160,3 +176,5 @@ int main() {
 
     h.run();
 }
+
+

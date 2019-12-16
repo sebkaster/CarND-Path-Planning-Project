@@ -1048,6 +1048,18 @@ lapacke_mangling.h
 
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/src/plugins/MatrixCwiseUnaryOps.h
 
+/mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.cpp
+car.h
+/mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.h
+iostream
+-
+
+/mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.h
+math.h
+/mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/math.h
+tuple
+-
+
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/helpers.h
 math.h
 -
@@ -1131,6 +1143,20 @@ helpers.h
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/helpers.h
 json.hpp
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/json.hpp
+spline.h
+/mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/spline.h
+car.h
+/mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.h
+
+/mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/spline.h
+cstdio
+-
+cassert
+-
+vector
+-
+algorithm
+-
 
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/trajectory.cpp
 trajectory.h
