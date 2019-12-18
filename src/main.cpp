@@ -112,82 +112,34 @@ int main() {
                         car_s = end_path_s;
                     }
 
-#if 0
+                    // auto[new_s_coords, new_d_coords] = ego_car.generateTrajectory(100 - previous_path_x.size(), 1, 1);
 
-                    double pos_x, pos_y;
-                    double angle;
-                    double s, s_d, s_dd;
-                    double d, d_d, d_dd;
-
-                    // use default values if not enough previous path points
-                    if (previous_path_x.size() < 4) {
-                        pos_x = car_x;
-                        pos_y = car_y;
-                        angle = deg2rad(car_yaw);
-                        s = car_s;
-                        d = car_d;
-                        s_d = car_speed;
-                        d_d = 0;
-                        s_dd = 0;
-                        d_dd = 0;
-                    } else {
-                        // calculate ego vehicle parameters based on the last four coordinates
-
-                        double pos_x_1 = previous_path_x[previous_path_x.size() - 1];
-                        double pos_x_2 = previous_path_x[previous_path_x.size() - 2];
-                        double pos_x_3 = previous_path_x[previous_path_x.size() - 3];
-                        double pos_x_4 = previous_path_x[previous_path_x.size() - 4];
-
-                        double pos_y_1 = previous_path_y[previous_path_x.size() - 1];
-                        double pos_y_2 = previous_path_y[previous_path_x.size() - 2];
-                        double pos_y_3 = previous_path_y[previous_path_x.size() - 3];
-                        double pos_y_4 = previous_path_y[previous_path_x.size() - 4];
-
-                        auto coords_1 = getFrenet(pos_x_1, pos_y_1, atan2(pos_y_1-pos_y_2,pos_x_1-pos_x_2), map_waypoints_x, map_waypoints_y);
-                        auto coords_2 = getFrenet(pos_x_2, pos_y_2, atan2(pos_y_2-pos_y_3,pos_x_2-pos_x_3), map_waypoints_x, map_waypoints_y);
-                        auto coords_3 = getFrenet(pos_x_3, pos_y_3, atan2(pos_y_3-pos_y_4,pos_x_3-pos_x_4), map_waypoints_x, map_waypoints_y);
-
-                        s = coords_1[0];
-                        s_d = (coords_1[0] - coords_2[0]) / time_step_size;
-                        s_dd = (s_d - (coords_2[0] - coords_3[0]) / time_step_size) / (2.0 * time_step_size);
-
-                        d = coords_1[1];
-                        d_d = (coords_1[1] - coords_2[1]) / time_step_size;
-                        d_dd = (d_d - (coords_2[1] - coords_3[1]) / time_step_size) / (2.0 * time_step_size);
+                    std::vector<Car> other_traffic_participants;
+                    other_traffic_participants.reserve(sensor_fusion.size());
+                    for (auto const &elem : sensor_fusion) {
+                        Car new_car(elem[5], elem[3], elem[6], elem[4]);
+                        new_car.determineLane();
+                        auto [ closest_s, furthest_s ] = new_car.predictFutureSates(previous_path_x.size());
+                        other_traffic_participants.emplace_back(std::move(new_car));
                     }
-
-                     Car ego_car(s, s_d, s_dd, d, d_d, d_dd);
-
-
-                     std::vector<Car> other_traffic_participants;
-                     other_traffic_participants.reserve(sensor_fusion.size());
-                     for (auto const &elem : sensor_fusion) {
-                         Car new_car(elem[5], elem[3], elem[6], elem[4]);
-                         new_car.determineLane();
-                         auto [ closest_s, furthest_s ] = new_car.predictFutureSates(previous_path_x.size());
-                         other_traffic_participants.emplace_back(std::move(new_car));
-                     }
-
-
-                    auto[new_s_coords, new_d_coords] = ego_car.generateTrajectory(100 - previous_path_x.size(), 1, 1);
-#endif
 
                     double speed_diff = 0;
 
-                    if (ref_vel < MAX_SPEED) {
+                    if (ref_vel < SPEED_LIMIT) {
                         speed_diff += MAX_ACC;
                     }
 
                     vector<double> ptsx;
                     vector<double> ptsy;
 
-                    double ref_x = car_x;
-                    double ref_y = car_y;
-                    double ref_yaw = deg2rad(car_yaw);
+                    double pos_x, pos_y;
+                    double angle;
+                    double s, s_d, s_dd;
+                    double d, d_d, d_dd;
 
                     // Do I have have previous points
                     if (prev_size < 2) {
-                        // There are not too many...
+                        // use two points to make the path tangent
                         double prev_car_x = car_x - cos(car_yaw);
                         double prev_car_y = car_y - sin(car_yaw);
 
@@ -196,21 +148,44 @@ int main() {
 
                         ptsy.push_back(prev_car_y);
                         ptsy.push_back(car_y);
+
+                        angle = deg2rad(car_yaw);
+                        s = car_s;
+                        d = car_d;
+                        s_d = car_speed;
+                        d_d = 0;
                     } else {
                         // Use the last two points
-                        ref_x = previous_path_x[prev_size - 1];
-                        ref_y = previous_path_y[prev_size - 1];
 
-                        double ref_x_prev = previous_path_x[prev_size - 2];
-                        double ref_y_prev = previous_path_y[prev_size - 2];
-                        ref_yaw = atan2(ref_y - ref_y_prev, ref_x - ref_x_prev);
+                        double pos_x_1 = previous_path_x[prev_size - 1];
+                        double pos_x_2 = previous_path_x[prev_size - 2];
+                        double pos_x_3 = previous_path_x[prev_size - 3];
 
-                        ptsx.push_back(ref_x_prev);
-                        ptsx.push_back(ref_x);
+                        double pos_y_1 = previous_path_y[prev_size - 1];
+                        double pos_y_2 = previous_path_y[prev_size - 2];
+                        double pos_y_3 = previous_path_y[prev_size - 3];
 
-                        ptsy.push_back(ref_y_prev);
-                        ptsy.push_back(ref_y);
+                        angle = atan2(pos_y_1-pos_y_2,pos_x_1-pos_x_2);
+                        auto coords_1 = getFrenet(pos_x_1, pos_y_1, angle, map_waypoints_x, map_waypoints_y);
+                        auto coords_2 = getFrenet(pos_x_2, pos_y_2, atan2(pos_y_2-pos_y_3,pos_x_2-pos_x_3), map_waypoints_x, map_waypoints_y);
+
+                        s = coords_1[0];
+                        s_d = (coords_1[0] - coords_2[0]) / TIME_STEP_SIZE;
+
+                        d = coords_1[1];
+                        d_d = (coords_1[1] - coords_2[1]) / TIME_STEP_SIZE;
+
+                        ptsx.push_back(pos_x_2);
+                        ptsx.push_back(pos_x_1);
+
+                        ptsy.push_back(pos_y_2);
+                        ptsy.push_back(pos_y_1);
                     }
+
+                    pos_x = ptsx.back();
+                    pos_y = ptsy.back();
+
+                    Car ego_car(s, s_d, d, d_d, middle);
 
                     // Setting up target points in the future
                     std::vector<double> next_wp0 = getXY(car_s + 30, 2 + 4 * lane, map_waypoints_s, map_waypoints_x,
@@ -228,58 +203,58 @@ int main() {
                     ptsy.push_back(next_wp1[1]);
                     ptsy.push_back(next_wp2[1]);
 
-                    // Making coordinates to local car coordinates.
+                    // transform to local car coordinates
                     for (int i = 0; i < ptsx.size(); i++) {
-                        double shift_x = ptsx[i] - ref_x;
-                        double shift_y = ptsy[i] - ref_y;
+                        double shift_x = ptsx[i] - pos_x;
+                        double shift_y = ptsy[i] - pos_y;
 
-                        ptsx[i] = shift_x * cos(0 - ref_yaw) - shift_y * sin(0 - ref_yaw);
-                        ptsy[i] = shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw);
+                        ptsx[i] = shift_x * cos(0 - angle) - shift_y * sin(0 - angle);
+                        ptsy[i] = shift_x * sin(0 - angle) + shift_y * cos(0 - angle);
                     }
 
-                    tk::spline s;
-                    s.set_points(ptsx, ptsy);
+                    tk::spline spline_;
+                    spline_.set_points(ptsx, ptsy);
 
-                    std::vector<double> next_x_vals;
-                    std::vector<double> next_y_vals;
+                    std::vector<double> next_x_vals(50);
+                    std::vector<double> next_y_vals(50);
 
 
                     for (int i = 0; i < prev_size; i++) {
-                        next_x_vals.push_back(previous_path_x[i]);
-                        next_y_vals.push_back(previous_path_y[i]);
+                        next_x_vals.emplace_back(previous_path_x[i]);
+                        next_y_vals.emplace_back(previous_path_y[i]);
                     }
 
                     // calculate distance y position on 30 m ahead
                     double target_x = 30.0;
-                    double target_y = s(target_x);
+                    double target_y = spline_(target_x);
                     double target_dist = sqrt(target_x * target_x + target_y * target_y);
 
                     double x_add_on = 0;
 
                     for (int i = 1; i < 50 - prev_size; i++) {
                         ref_vel += speed_diff;
-                        if (ref_vel > MAX_SPEED) {
-                            ref_vel = MAX_SPEED;
+                        if (ref_vel > SPEED_LIMIT) {
+                            ref_vel = SPEED_LIMIT;
                         } else if (ref_vel < MAX_ACC) {
                             ref_vel = MAX_ACC;
                         }
                         double N = target_dist / (0.02 * ref_vel / 2.24);
                         double x_point = x_add_on + target_x / N;
-                        double y_point = s(x_point);
+                        double y_point = spline_(x_point);
 
                         x_add_on = x_point;
 
                         double x_ref = x_point;
                         double y_ref = y_point;
 
-                        x_point = x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw);
-                        y_point = x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw);
+                        x_point = x_ref * cos(angle) - y_ref * sin(angle);
+                        y_point = x_ref * sin(angle) + y_ref * cos(angle);
 
-                        x_point += ref_x;
-                        y_point += ref_y;
+                        x_point += pos_x;
+                        y_point += pos_y;
 
-                        next_x_vals.push_back(x_point);
-                        next_y_vals.push_back(y_point);
+                        next_x_vals.emplace_back(x_point);
+                        next_y_vals.emplace_back(y_point);
                     }
 
                     msgJson["next_x"] = next_x_vals;
