@@ -1051,13 +1051,19 @@ lapacke_mangling.h
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.cpp
 car.h
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.h
+trajectory.h
+/mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/trajectory.h
 iostream
+-
+algorithm
 -
 
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.h
 math.h
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/math.h
 tuple
+-
+vector
 -
 
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/helpers.h

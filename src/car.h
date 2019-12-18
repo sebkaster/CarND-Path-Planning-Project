@@ -7,6 +7,7 @@
 
 #include "math.h"
 #include <tuple>
+#include <vector>
 
 enum Lane {
     left = 0, middle = 1, right = 2, other = 3, unknown = -1
@@ -57,7 +58,10 @@ public:
     /* member functions */
     void determineLane();
 
-    std::tuple<double, double> predictFutureSates(size_t const& num_time_steps, double time_step_size = 0.02);
+    std::tuple<double, double> predictFutureSates(size_t const &num_time_steps, double time_step_size = 0.02);
+
+    std::tuple <std::vector<double>, std::vector<double>>
+        generateTrajectory(size_t const &num_time_steps, double const &target_s, double const &target_d);
 
 private:
 
