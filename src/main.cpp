@@ -119,14 +119,8 @@ int main() {
                     for (auto const &elem : sensor_fusion) {
                         Car new_car(elem[5], elem[3], elem[6], elem[4]);
                         new_car.determineLane();
-                        auto [ closest_s, furthest_s ] = new_car.predictFutureSates(previous_path_x.size());
+                        auto[closest_s, furthest_s] = new_car.predictFutureSates(previous_path_x.size());
                         other_traffic_participants.emplace_back(std::move(new_car));
-                    }
-
-                    double speed_diff = 0;
-
-                    if (ref_vel < SPEED_LIMIT) {
-                        speed_diff += MAX_ACC;
                     }
 
                     vector<double> ptsx;
@@ -165,9 +159,12 @@ int main() {
                         double pos_y_2 = previous_path_y[prev_size - 2];
                         double pos_y_3 = previous_path_y[prev_size - 3];
 
-                        angle = atan2(pos_y_1-pos_y_2,pos_x_1-pos_x_2);
+                        angle = atan2(pos_y_1 - pos_y_2, pos_x_1 - pos_x_2);
                         auto coords_1 = getFrenet(pos_x_1, pos_y_1, angle, map_waypoints_x, map_waypoints_y);
-                        auto coords_2 = getFrenet(pos_x_2, pos_y_2, atan2(pos_y_2-pos_y_3,pos_x_2-pos_x_3), map_waypoints_x, map_waypoints_y);
+                        auto coords_2 = getFrenet(pos_x_2, pos_y_2, atan2(pos_y_2 - pos_y_3, pos_x_2 - pos_x_3),
+                                                  map_waypoints_x, map_waypoints_y);
+
+                        car_speed = distance(pos_x_1, pos_y_1, pos_x_2, pos_y_2) / TIME_STEP_SIZE;
 
                         s = coords_1[0];
                         s_d = (coords_1[0] - coords_2[0]) / TIME_STEP_SIZE;
@@ -186,13 +183,82 @@ int main() {
                     pos_y = ptsy.back();
 
                     Car ego_car(s, s_d, d, d_d, middle);
+                    ego_car.determineLane();
 
-                    // Setting up target points in the future
-                    std::vector<double> next_wp0 = getXY(car_s + 30, 2 + 4 * lane, map_waypoints_s, map_waypoints_x,
+                    bool car_ahead = false;
+                    bool could_change_left = true;
+                    bool could_change_right = true;
+
+                    if(ego_car.get_current_lane() == left)
+                    {
+                        could_change_left = false;
+                    }
+                    else if(ego_car.get_current_lane() == right)
+                    {
+                        could_change_right = true;
+                    }
+
+                    for (auto const &elem : other_traffic_participants) {
+                        if (elem.get_current_lane() == ego_car.get_current_lane()) {
+                            if (ego_car.get_s() < elem.get_s() &&
+                                std::abs(ego_car.get_s() - elem.get_s()) < 20 && car_speed > (elem.get_v_abs() - 3.0)) {
+                                car_ahead = true;
+                            }
+                        } else if (std::abs(ego_car.get_s() - elem.get_s()) < 30) {
+                            switch (ego_car.get_current_lane()) {
+                                case middle: {
+                                    if (elem.get_current_lane() == left) {
+                                        could_change_left = false;
+                                    } else if (elem.get_current_lane() == right) {
+                                        could_change_right = false;
+                                    }
+                                    break;
+                                }
+                                case left: {
+                                    if (elem.get_current_lane() == middle) {
+                                        could_change_right = false;
+                                    }
+                                    break;
+                                }
+                                case right: {
+                                    could_change_right = false;
+                                    if (elem.get_current_lane() == middle) {
+                                        could_change_left = false;
+                                    }
+                                    break;
+                                }
+                                default: {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    Lane next_lane = ego_car.get_current_lane();
+                    if (car_ahead && (could_change_left || could_change_right)) {
+                        next_lane = static_cast<Lane>(int(next_lane) + could_change_left ? int(next_lane) - 1 :
+                                                      int(next_lane) + 1);
+                    }
+
+
+                    double speed_diff = 0;
+                    if (car_ahead) {
+                        speed_diff -= 0.1;
+                    } else {
+                        if (ref_vel < SPEED_LIMIT) {
+                            speed_diff += 0.1;
+                        }
+                    }
+                    std::cout << "next_lane: " << int(next_lane) << std::endl;
+                    // Setting up target points in the future.
+                    vector<double> next_wp0 = getXY(car_s + 30, 2 + 4 * int(next_lane), map_waypoints_s,
+                                                    map_waypoints_x,
                                                     map_waypoints_y);
-                    std::vector<double> next_wp1 = getXY(car_s + 60, 2 + 4 * lane, map_waypoints_s, map_waypoints_x,
+                    vector<double> next_wp1 = getXY(car_s + 60, 2 + 4 * int(next_lane), map_waypoints_s,
+                                                    map_waypoints_x,
                                                     map_waypoints_y);
-                    std::vector<double> next_wp2 = getXY(car_s + 90, 2 + 4 * lane, map_waypoints_s, map_waypoints_x,
+                    vector<double> next_wp2 = getXY(car_s + 90, 2 + 4 * int(next_lane), map_waypoints_s,
+                                                    map_waypoints_x,
                                                     map_waypoints_y);
 
                     ptsx.push_back(next_wp0[0]);
@@ -203,7 +269,7 @@ int main() {
                     ptsy.push_back(next_wp1[1]);
                     ptsy.push_back(next_wp2[1]);
 
-                    // transform to local car coordinates
+                    // Making coordinates to local car coordinates.
                     for (int i = 0; i < ptsx.size(); i++) {
                         double shift_x = ptsx[i] - pos_x;
                         double shift_y = ptsy[i] - pos_y;
@@ -212,19 +278,23 @@ int main() {
                         ptsy[i] = shift_x * sin(0 - angle) + shift_y * cos(0 - angle);
                     }
 
+                    // Create the spline.
                     tk::spline spline_;
                     spline_.set_points(ptsx, ptsy);
 
-                    std::vector<double> next_x_vals(50);
-                    std::vector<double> next_y_vals(50);
+                    // Output path points from previous path for continuity.
+                    std::vector<double> next_x_vals;
+                    next_x_vals.reserve(50);
 
+                    std::vector<double> next_y_vals;
+                    next_y_vals.reserve(50);
 
                     for (int i = 0; i < prev_size; i++) {
                         next_x_vals.emplace_back(previous_path_x[i]);
                         next_y_vals.emplace_back(previous_path_y[i]);
                     }
 
-                    // calculate distance y position on 30 m ahead
+                    // Calculate distance y position on 30 m ahead.
                     double target_x = 30.0;
                     double target_y = spline_(target_x);
                     double target_dist = sqrt(target_x * target_x + target_y * target_y);
@@ -259,7 +329,6 @@ int main() {
 
                     msgJson["next_x"] = next_x_vals;
                     msgJson["next_y"] = next_y_vals;
-
 
                     auto msg = "42[\"control\"," + msgJson.dump() + "]";
 

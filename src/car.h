@@ -47,7 +47,9 @@ public:
 
     double get_d_d() const { return d_d_; }
 
-    double get_current_lane() const { return current_lane_; }
+    Lane get_current_lane() const { return current_lane_; }
+
+    double get_v_abs() const { return v_abs_; }
 
     /* member functions */
     void determineLane();
