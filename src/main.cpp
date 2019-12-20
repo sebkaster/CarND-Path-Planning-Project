@@ -114,14 +114,7 @@ int main() {
 
                     // auto[new_s_coords, new_d_coords] = ego_car.generateTrajectory(100 - previous_path_x.size(), 1, 1);
 
-                    std::vector<Car> other_traffic_participants;
-                    other_traffic_participants.reserve(sensor_fusion.size());
-                    for (auto const &elem : sensor_fusion) {
-                        Car new_car(elem[5], elem[3], elem[6], elem[4]);
-                        new_car.determineLane();
-                        auto[closest_s, furthest_s] = new_car.predictFutureSates(previous_path_x.size());
-                        other_traffic_participants.emplace_back(std::move(new_car));
-                    }
+
 
                     vector<double> ptsx;
                     vector<double> ptsy;
@@ -189,55 +182,68 @@ int main() {
                     bool could_change_left = true;
                     bool could_change_right = true;
 
-                    if(ego_car.get_current_lane() == left)
-                    {
+                    if (ego_car.get_current_lane() == left) {
                         could_change_left = false;
-                    }
-                    else if(ego_car.get_current_lane() == right)
-                    {
+                    } else if (ego_car.get_current_lane() == right) {
                         could_change_right = true;
                     }
 
-                    for (auto const &elem : other_traffic_participants) {
-                        if (elem.get_current_lane() == ego_car.get_current_lane()) {
-                            if (ego_car.get_s() < elem.get_s() &&
-                                std::abs(ego_car.get_s() - elem.get_s()) < 20 && car_speed > (elem.get_v_abs() - 3.0)) {
-                                car_ahead = true;
-                            }
-                        } else if (std::abs(ego_car.get_s() - elem.get_s()) < 30) {
-                            switch (ego_car.get_current_lane()) {
-                                case middle: {
-                                    if (elem.get_current_lane() == left) {
-                                        could_change_left = false;
-                                    } else if (elem.get_current_lane() == right) {
+                    for (auto const &elem : sensor_fusion) {
+                        Car new_car(elem[5], elem[3], elem[6], elem[4]);
+                        new_car.determineLane();
+                        auto[closest_s, furthest_s] = new_car.predictFutureSates(50);
+
+                        bool dangerous = closest_s - 10 < ego_car.get_s() < furthest_s + 10;
+
+
+                        if (dangerous) {
+
+                            if (new_car.get_current_lane() == ego_car.get_current_lane()) {
+                                if (ego_car.get_s() < new_car.get_s() &&
+                                    std::abs(ego_car.get_s() - new_car.get_s()) < 20 &&
+                                    car_speed > (new_car.get_v_abs() - 3.0)) {
+                                    car_ahead = true;
+                                }
+                            } else if (std::abs(ego_car.get_s() - new_car.get_s()) < 30) {
+                                switch (ego_car.get_current_lane()) {
+                                    case middle: {
+                                        if (new_car.get_current_lane() == left) {
+                                            could_change_left = false;
+                                        } else if (new_car.get_current_lane() == right) {
+                                            could_change_right = false;
+                                        }
+                                        break;
+                                    }
+                                    case left: {
+                                        if (new_car.get_current_lane() == middle) {
+                                            could_change_right = false;
+                                        }
+                                        break;
+                                    }
+                                    case right: {
                                         could_change_right = false;
+                                        if (new_car.get_current_lane() == middle) {
+                                            could_change_left = false;
+                                        }
+                                        break;
                                     }
-                                    break;
-                                }
-                                case left: {
-                                    if (elem.get_current_lane() == middle) {
-                                        could_change_right = false;
+                                    default: {
+                                        break;
                                     }
-                                    break;
-                                }
-                                case right: {
-                                    could_change_right = false;
-                                    if (elem.get_current_lane() == middle) {
-                                        could_change_left = false;
-                                    }
-                                    break;
-                                }
-                                default: {
-                                    break;
                                 }
                             }
                         }
                     }
 
+                    std::cout << could_change_left << " " << could_change_right << std::endl;
                     Lane next_lane = ego_car.get_current_lane();
                     if (car_ahead && (could_change_left || could_change_right)) {
-                        next_lane = static_cast<Lane>(int(next_lane) + could_change_left ? int(next_lane) - 1 :
+
+                        next_lane = static_cast<Lane>(could_change_left ? int(next_lane) - 1 :
                                                       int(next_lane) + 1);
+                    } else if (next_lane != middle && ((next_lane == left && could_change_right) ||
+                                                       (next_lane == right && could_change_left))) {
+                        next_lane == middle;
                     }
 
 
@@ -303,11 +309,7 @@ int main() {
 
                     for (int i = 1; i < 50 - prev_size; i++) {
                         ref_vel += speed_diff;
-                        if (ref_vel > SPEED_LIMIT) {
-                            ref_vel = SPEED_LIMIT;
-                        } else if (ref_vel < MAX_ACC) {
-                            ref_vel = MAX_ACC;
-                        }
+                        ref_vel = std::max(std::min(ref_vel, SPEED_LIMIT), 0.0);
                         double N = target_dist / (0.02 * ref_vel / 2.24);
                         double x_point = x_add_on + target_x / N;
                         double y_point = spline_(x_point);
