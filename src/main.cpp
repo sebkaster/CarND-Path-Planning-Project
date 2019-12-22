@@ -9,6 +9,7 @@
 #include "json.hpp"
 #include "spline.h"
 
+
 #include "car.h"
 
 // for convenience
@@ -18,8 +19,11 @@ using std::vector;
 
 /* define constants */
 const double TIME_STEP_SIZE = 0.02;
-const double SPEED_LIMIT = 49.5;
-const double MAX_ACC = 0.224;
+const double NUM_TIME_STEPS = 25;
+const double SPEED_LIMIT = 22; // m/s
+const double MAX_ACC = 5.0 * TIME_STEP_SIZE; // m/s^2
+const double SAFETY_DISTANCE = 20;
+const double SPEED_BUFFER = 5.0;
 
 int main() {
     uWS::Hub h;
@@ -112,12 +116,11 @@ int main() {
                         car_s = end_path_s;
                     }
 
-                    // auto[new_s_coords, new_d_coords] = ego_car.generateTrajectory(100 - previous_path_x.size(), 1, 1);
 
-
-
-                    vector<double> ptsx;
-                    vector<double> ptsy;
+                    std::vector<double> ptsx;
+                    ptsx.reserve(5);
+                    std::vector<double> ptsy;
+                    ptsy.reserve(5);
 
                     double pos_x, pos_y;
                     double angle;
@@ -130,11 +133,11 @@ int main() {
                         double prev_car_x = car_x - cos(car_yaw);
                         double prev_car_y = car_y - sin(car_yaw);
 
-                        ptsx.push_back(prev_car_x);
-                        ptsx.push_back(car_x);
+                        ptsx.emplace_back(prev_car_x);
+                        ptsx.emplace_back(car_x);
 
-                        ptsy.push_back(prev_car_y);
-                        ptsy.push_back(car_y);
+                        ptsy.emplace_back(prev_car_y);
+                        ptsy.emplace_back(car_y);
 
                         angle = deg2rad(car_yaw);
                         s = car_s;
@@ -165,11 +168,11 @@ int main() {
                         d = coords_1[1];
                         d_d = (coords_1[1] - coords_2[1]) / TIME_STEP_SIZE;
 
-                        ptsx.push_back(pos_x_2);
-                        ptsx.push_back(pos_x_1);
+                        ptsx.emplace_back(pos_x_2);
+                        ptsx.emplace_back(pos_x_1);
 
-                        ptsy.push_back(pos_y_2);
-                        ptsy.push_back(pos_y_1);
+                        ptsy.emplace_back(pos_y_2);
+                        ptsy.emplace_back(pos_y_1);
                     }
 
                     pos_x = ptsx.back();
@@ -191,20 +194,34 @@ int main() {
                     for (auto const &elem : sensor_fusion) {
                         Car new_car(elem[5], elem[3], elem[6], elem[4]);
                         new_car.determineLane();
-                        auto[closest_s, furthest_s] = new_car.predictFutureSates(50);
 
-                        bool dangerous = closest_s - 10 < ego_car.get_s() < furthest_s + 10;
+                        if (new_car.get_current_lane() == unknown) {
+                            continue;
+                        }
+                        auto[closest_s, furthest_s] = new_car.predictFutureSates(NUM_TIME_STEPS);
 
+
+                        double max_add_on_s = 0.0;
+                        double current_vel = car_speed;
+                        for (size_t i = 0; i < NUM_TIME_STEPS - prev_size; ++i) {
+                            current_vel += car_speed + MAX_ACC;
+                            max_add_on_s += current_vel * TIME_STEP_SIZE;
+                        }
+
+                        double safety_distance =
+                                0.55 * car_speed * 3.6;
+
+                        bool dangerous = (closest_s - (safety_distance + max_add_on_s)) < ego_car.get_s() &&
+                                         ego_car.get_s() < (furthest_s + (safety_distance - max_add_on_s));
 
                         if (dangerous) {
 
                             if (new_car.get_current_lane() == ego_car.get_current_lane()) {
                                 if (ego_car.get_s() < new_car.get_s() &&
-                                    std::abs(ego_car.get_s() - new_car.get_s()) < 20 &&
-                                    car_speed > (new_car.get_v_abs() - 3.0)) {
+                                    (car_speed + SPEED_BUFFER) > new_car.get_v_abs()) {
                                     car_ahead = true;
                                 }
-                            } else if (std::abs(ego_car.get_s() - new_car.get_s()) < 30) {
+                            } else {
                                 switch (ego_car.get_current_lane()) {
                                     case middle: {
                                         if (new_car.get_current_lane() == left) {
@@ -235,26 +252,31 @@ int main() {
                         }
                     }
 
-                    std::cout << could_change_left << " " << could_change_right << std::endl;
+
                     Lane next_lane = ego_car.get_current_lane();
+                    bool changed_lane = false;
                     if (car_ahead && (could_change_left || could_change_right)) {
 
                         next_lane = static_cast<Lane>(could_change_left ? int(next_lane) - 1 :
                                                       int(next_lane) + 1);
+                        changed_lane = true;
                     } else if (next_lane != middle && ((next_lane == left && could_change_right) ||
                                                        (next_lane == right && could_change_left))) {
                         next_lane == middle;
+                        changed_lane = true;
                     }
-
+                    std::cout << "left: " << could_change_left << std::endl;
+                    std::cout << "right: " << could_change_right << std::endl;
 
                     double speed_diff = 0;
-                    if (car_ahead) {
-                        speed_diff -= 0.1;
+                    if (car_ahead && !changed_lane) {
+                        speed_diff -= MAX_ACC;
                     } else {
                         if (ref_vel < SPEED_LIMIT) {
-                            speed_diff += 0.1;
+                            speed_diff += MAX_ACC;
                         }
                     }
+
                     std::cout << "next_lane: " << int(next_lane) << std::endl;
                     // Setting up target points in the future.
                     vector<double> next_wp0 = getXY(car_s + 30, 2 + 4 * int(next_lane), map_waypoints_s,
@@ -267,13 +289,13 @@ int main() {
                                                     map_waypoints_x,
                                                     map_waypoints_y);
 
-                    ptsx.push_back(next_wp0[0]);
-                    ptsx.push_back(next_wp1[0]);
-                    ptsx.push_back(next_wp2[0]);
+                    ptsx.emplace_back(next_wp0[0]);
+                    ptsx.emplace_back(next_wp1[0]);
+                    ptsx.emplace_back(next_wp2[0]);
 
-                    ptsy.push_back(next_wp0[1]);
-                    ptsy.push_back(next_wp1[1]);
-                    ptsy.push_back(next_wp2[1]);
+                    ptsy.emplace_back(next_wp0[1]);
+                    ptsy.emplace_back(next_wp1[1]);
+                    ptsy.emplace_back(next_wp2[1]);
 
                     // Making coordinates to local car coordinates.
                     for (int i = 0; i < ptsx.size(); i++) {
@@ -290,10 +312,10 @@ int main() {
 
                     // Output path points from previous path for continuity.
                     std::vector<double> next_x_vals;
-                    next_x_vals.reserve(50);
+                    next_x_vals.reserve(NUM_TIME_STEPS);
 
                     std::vector<double> next_y_vals;
-                    next_y_vals.reserve(50);
+                    next_y_vals.reserve(NUM_TIME_STEPS);
 
                     for (int i = 0; i < prev_size; i++) {
                         next_x_vals.emplace_back(previous_path_x[i]);
@@ -307,10 +329,10 @@ int main() {
 
                     double x_add_on = 0;
 
-                    for (int i = 1; i < 50 - prev_size; i++) {
+                    for (int i = 1; i < NUM_TIME_STEPS - prev_size; i++) {
                         ref_vel += speed_diff;
                         ref_vel = std::max(std::min(ref_vel, SPEED_LIMIT), 0.0);
-                        double N = target_dist / (0.02 * ref_vel / 2.24);
+                        double N = target_dist / (0.02 * ref_vel);
                         double x_point = x_add_on + target_x / N;
                         double y_point = spline_(x_point);
 
