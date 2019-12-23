@@ -1151,6 +1151,8 @@ json.hpp
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/json.hpp
 spline.h
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/spline.h
+omp.h
+-
 car.h
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.h
 
