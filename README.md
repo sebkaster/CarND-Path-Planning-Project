@@ -143,6 +143,11 @@ the path has processed since last time.
 <!-- REFLECTION -->
 ## Reflection
 
+General Approach: 
+
+* Time horizon: 0.5 seconds
+* Trajectory points from pervious runs which are not executed yet are copied into this new trajectory.
+
 Based on the provided code, the trajectory generation is divided into three steps:
 
 #### [Prediction](./src/main.cpp#L54)
@@ -167,8 +172,8 @@ Since we do not want to endanger other traffic participants we keep a safe dista
 This part does the calculation of the trajectory based on the speed and the result from the behavior planner, car coordinates and past path points.
 
 To make the work less complicated, coordinates are transformed to local car coordinates. Based on the result of the behaviour planner a path is planned in frenet coordinates with four supportive points.
-This frenet path is converted to local x- and y-coordinates. To generate a smooth trajectory spline is used. Based on this spline points are sampled in in a distance of 0.02 seconds. Moreover we perform acceleration and deceleration. Usually we are trying to accelerate until we have reached the speed limit of the lane of 50 mph. Nevertheless, if a car is dangerously close in front of the ego vehicle we decelerate. 
-
+This frenet-path is converted to local x- and y-coordinates. To generate a smooth trajectory a spline is used. Based on this spline points are sampled in in a distance of 0.02 seconds. Moreover we perform acceleration and deceleration. Usually we are trying to accelerate until we have reached the speed limit of the lane of 50 mph. Nevertheless, if a car is dangerously close in front of the ego vehicle we decelerate. 
+Finally, we transform our local points back to global coordinates.
 
 <!-- CONTRIBUTING -->
 ## Contributing
