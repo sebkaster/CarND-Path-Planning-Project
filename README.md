@@ -10,7 +10,7 @@
   * [Installation](#installation)
 * [Structure](#structure)
 * [Simulator Description](#simulator-description)
-* [Reflection](#usage)
+* [Reflection](#reflection)
 * [Contributing](#contributing)
 * [License](#license)
 * [Contact](#contact)
@@ -150,7 +150,7 @@ General Approach:
 
 Based on the provided code, the trajectory generation is divided into three steps:
 
-#### [Prediction](./src/main.cpp#L54)
+#### [Prediction](./src/car.cpp#L54)
 
 In order to plan a safe trajectory, we have to know where other traffic participants could be in the future. Therefore,
 based on the current state of these traffic participants, the set of possible future states is calculated.
