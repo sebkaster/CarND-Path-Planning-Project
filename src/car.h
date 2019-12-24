@@ -27,12 +27,13 @@ public:
         current_lane_ = unknown;
     }
 
-    Car(double s, double s_d, double d, double d_d, Lane current_lane) {
+    Car(double s, double s_d, double d, double d_d, double v_abs) {
         s_ = s;
         s_d_ = s_d;
         d_ = d;
         d_d_ = d_d;
-        current_lane_ = current_lane;
+        v_abs_ = v_abs;
+        current_lane_ = unknown;
     }
 
     ~Car() {}
@@ -52,10 +53,16 @@ public:
     double get_v_abs() const { return v_abs_; }
 
     /* member functions */
+
+    // determine current lane based on d value in frenet coordinate system
     void determineLane();
 
+    // predict furthest/closest travelled distance with respect to maximum acceleration/deceleration
     std::tuple<double, double> predictFutureSates(size_t const &num_time_steps, double time_step_size = 0.02);
 
+    // find the best next high-level future action
+    std::tuple<Lane, bool> behaviourPlanner(size_t const &prev_size,
+                                            std::vector <std::vector<double>> const &sensor_fusion);
 
 private:
 

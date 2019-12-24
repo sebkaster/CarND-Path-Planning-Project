@@ -177,33 +177,6 @@ src/main.cpp.s:
 	$(MAKE) -f CMakeFiles/path_planning.dir/build.make CMakeFiles/path_planning.dir/src/main.cpp.s
 .PHONY : src/main.cpp.s
 
-src/trajectory.o: src/trajectory.cpp.o
-
-.PHONY : src/trajectory.o
-
-# target to build an object file
-src/trajectory.cpp.o:
-	$(MAKE) -f CMakeFiles/path_planning.dir/build.make CMakeFiles/path_planning.dir/src/trajectory.cpp.o
-.PHONY : src/trajectory.cpp.o
-
-src/trajectory.i: src/trajectory.cpp.i
-
-.PHONY : src/trajectory.i
-
-# target to preprocess a source file
-src/trajectory.cpp.i:
-	$(MAKE) -f CMakeFiles/path_planning.dir/build.make CMakeFiles/path_planning.dir/src/trajectory.cpp.i
-.PHONY : src/trajectory.cpp.i
-
-src/trajectory.s: src/trajectory.cpp.s
-
-.PHONY : src/trajectory.s
-
-# target to generate assembly for a file
-src/trajectory.cpp.s:
-	$(MAKE) -f CMakeFiles/path_planning.dir/build.make CMakeFiles/path_planning.dir/src/trajectory.cpp.s
-.PHONY : src/trajectory.cpp.s
-
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -219,9 +192,6 @@ help:
 	@echo "... src/main.o"
 	@echo "... src/main.i"
 	@echo "... src/main.s"
-	@echo "... src/trajectory.o"
-	@echo "... src/trajectory.i"
-	@echo "... src/trajectory.s"
 .PHONY : help
 
 

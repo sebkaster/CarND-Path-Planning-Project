@@ -8,18 +8,10 @@
 #include "helpers.h"
 #include "json.hpp"
 #include "spline.h"
-#include <omp.h>
+#include "constants.h"
+
 
 #include "car.h"
-
-/* define constants */
-const double TIME_STEP_SIZE = 0.02;
-const double NUM_TIME_STEPS = 25;
-const double SPEED_LIMIT = 22; // m/s
-const double MAX_ACC = 5.0 * TIME_STEP_SIZE; // m/s^2
-const double SAFETY_DISTANCE = 20;
-const double SPEED_BUFFER = 5.0;
-const unsigned NUM_THREADS = 4;
 
 
 int main() {
@@ -58,13 +50,7 @@ int main() {
         map_waypoints_dy.push_back(d_y);
     }
 
-    // Car's lane. Starting at middle lane.
-    int lane = 1;
-
-    // Reference velocity.
-    double ref_vel = 0.0; // mph
-
-    h.onMessage([&ref_vel, &lane, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
+    h.onMessage([&map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
                         &map_waypoints_dx, &map_waypoints_dy]
                         (uWS::WebSocket <uWS::SERVER> ws, char *data, size_t length,
                          uWS::OpCode opCode) {
@@ -115,9 +101,9 @@ int main() {
 
 
                     std::vector<double> ptsx;
-                    ptsx.reserve(5);
+                    ptsx.reserve(6);
                     std::vector<double> ptsy;
-                    ptsy.reserve(5);
+                    ptsy.reserve(6);
 
                     double pos_x, pos_y;
                     double angle;
@@ -175,120 +161,49 @@ int main() {
                     pos_x = ptsx.back();
                     pos_y = ptsy.back();
 
-                    Car ego_car(s, s_d, d, d_d, middle);
+                    // initialize own vehicle
+                    Car ego_car(s, s_d, d, d_d, car_speed);
                     ego_car.determineLane();
 
-                    double max_add_on_s = 0.0;
-                    double current_vel = car_speed;
-                    for (size_t i = 0; i < NUM_TIME_STEPS - prev_size; ++i) {
-                        current_vel += car_speed + MAX_ACC;
-                        max_add_on_s += current_vel * TIME_STEP_SIZE;
-                    }
+                    // determine next high-level action based on predicted states of other traffic participants
+                    auto[next_lane, car_ahead_dangerous] = ego_car.behaviourPlanner(prev_size, sensor_fusion);
+                    bool changed_lane = next_lane != ego_car.get_current_lane();
 
-                    double safety_distance =
-                            0.55 * car_speed * 3.6;
-
-                    bool car_ahead = false;
-                    bool car_ahead_dangerous = false;
-                    bool could_change_left = true;
-                    bool could_change_right = true;
-                    bool car_in_front_left = false;
-                    bool car_in_front_right = false;
-
-                    if (ego_car.get_current_lane() == left) {
-                        could_change_left = false;
-                    } else if (ego_car.get_current_lane() == right) {
-                        could_change_right = false;
-                    }
-
-                    #pragma omp parallel for schedule(guided) num_threads(OPEN_MP_NUM_THREADS) \
-                    reduction(&&, could_change_left) reduction(&&, could_change_right) reduction(||, car_ahead_dangerous) \
-                    reduction(||, car_ahead) reduction(||, car_in_front_right) reduction(||, car_in_front_left)
-                    for (auto const &elem : sensor_fusion) {
-                        Car new_car(elem[5], elem[3], elem[6], elem[4]);
-                        new_car.determineLane();
-
-                        if (new_car.get_current_lane() == unknown) {
-                            continue;
-                        }
-                        auto[closest_s, furthest_s] = new_car.predictFutureSates(NUM_TIME_STEPS);
-
-                        bool dangerous = (closest_s - (safety_distance + max_add_on_s)) < ego_car.get_s() &&
-                                         ego_car.get_s() < (furthest_s + (safety_distance - max_add_on_s));
-
-                        if (new_car.get_current_lane() == ego_car.get_current_lane()) {
-                            if (ego_car.get_s() < new_car.get_s() && dangerous &&
-                                (car_speed + SPEED_BUFFER) > new_car.get_v_abs()) {
-                                car_ahead_dangerous = true;
-                            }
-                        } else {
-                            switch (ego_car.get_current_lane()) {
-                                case middle: {
-                                    if (new_car.get_current_lane() == left && dangerous) {
-                                        could_change_left = false;
-                                    } else if (new_car.get_current_lane() == right && dangerous) {
-                                        could_change_right = false;
-                                    }
-                                    break;
-                                }
-                                case left: {
-                                    if (new_car.get_current_lane() == middle && dangerous) {
-                                        could_change_right = false;
-                                    }
-                                    break;
-                                }
-                                case right: {
-                                    if (new_car.get_current_lane() == middle && dangerous) {
-                                        could_change_left = false;
-                                    }
-                                    break;
-                                }
-                                default: {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-
-                    Lane next_lane = ego_car.get_current_lane();
-                    bool changed_lane = false;
-                    if (car_ahead_dangerous && (could_change_left || could_change_right)) {
-
-                        next_lane = static_cast<Lane>(could_change_left ? int(next_lane) - 1 :
-                                                      int(next_lane) + 1);
-                        changed_lane = true;
-                    }
-
+                    // adjust speed
                     double speed_diff = 0;
                     if (car_ahead_dangerous && !changed_lane) {
-                        speed_diff -= MAX_ACC;
+                        speed_diff -= MAX_ABS_ACC_EGO_VEHICLE;
                     } else {
-                        if (ref_vel < SPEED_LIMIT) {
-                            speed_diff += MAX_ACC;
+                        if (ego_car.get_v_abs() < SPEED_LIMIT) {
+                            speed_diff += MAX_ABS_ACC_EGO_VEHICLE;
                         }
                     }
 
                     // Setting up target points in the future.
                     std::vector<double> next_wp0 = getXY(car_s + 30, 2 + 4 * int(next_lane), map_waypoints_s,
-                                                    map_waypoints_x,
-                                                    map_waypoints_y);
-                    std::vector<double> next_wp1 = getXY(car_s + 60, 2 + 4 * int(next_lane), map_waypoints_s,
-                                                    map_waypoints_x,
-                                                    map_waypoints_y);
-                    std::vector<double> next_wp2 = getXY(car_s + 90, 2 + 4 * int(next_lane), map_waypoints_s,
-                                                    map_waypoints_x,
-                                                    map_waypoints_y);
+                                                         map_waypoints_x,
+                                                         map_waypoints_y);
+                    std::vector<double> next_wp1 = getXY(car_s + 40, 2 + 4 * int(next_lane), map_waypoints_s,
+                                                         map_waypoints_x,
+                                                         map_waypoints_y);
+                    std::vector<double> next_wp2 = getXY(car_s + 50, 2 + 4 * int(next_lane), map_waypoints_s,
+                                                         map_waypoints_x,
+                                                         map_waypoints_y);
+                    std::vector<double> next_wp3 = getXY(car_s + 60, 2 + 4 * int(next_lane), map_waypoints_s,
+                                                         map_waypoints_x,
+                                                         map_waypoints_y);
 
                     ptsx.emplace_back(next_wp0[0]);
                     ptsx.emplace_back(next_wp1[0]);
                     ptsx.emplace_back(next_wp2[0]);
+                    ptsx.emplace_back(next_wp3[0]);
 
                     ptsy.emplace_back(next_wp0[1]);
                     ptsy.emplace_back(next_wp1[1]);
                     ptsy.emplace_back(next_wp2[1]);
+                    ptsy.emplace_back(next_wp3[1]);
 
-                    // Making coordinates to local car coordinates.
+                    // convert coordinates to local car coordinates.
                     for (int i = 0; i < ptsx.size(); i++) {
                         double shift_x = ptsx[i] - pos_x;
                         double shift_y = ptsy[i] - pos_y;
@@ -297,19 +212,21 @@ int main() {
                         ptsy[i] = shift_x * sin(0 - angle) + shift_y * cos(0 - angle);
                     }
 
-                    // Create the spline.
-                    tk::spline spline_;
-                    spline_.set_points(ptsx, ptsy);
 
-                    // Output path points from previous path for continuity.
                     std::vector<double> next_x_vals;
                     next_x_vals.reserve(NUM_TIME_STEPS);
 
                     std::vector<double> next_y_vals;
                     next_y_vals.reserve(NUM_TIME_STEPS);
 
+                    // use path points from previous path for continuity
                     next_x_vals.insert(std::end(next_x_vals), std::begin(previous_path_x), std::end(previous_path_x));
                     next_y_vals.insert(std::end(next_y_vals), std::begin(previous_path_y), std::end(previous_path_y));
+
+
+                    // create the spline.
+                    tk::spline spline_;
+                    spline_.set_points(ptsx, ptsy);
 
                     // Calculate distance y position on 30 m ahead.
                     double target_x = 30.0;
@@ -318,21 +235,30 @@ int main() {
 
                     double x_add_on = 0;
 
-                    for (int i = 1; i < NUM_TIME_STEPS - prev_size; i++) {
-                        ref_vel += speed_diff;
-                        ref_vel = std::max(std::min(ref_vel, SPEED_LIMIT), 0.0);
-                        double N = target_dist / (0.02 * ref_vel);
-                        double x_point = x_add_on + target_x / N;
-                        double y_point = spline_(x_point);
+                    double x_ref, y_ref, x_point, y_point, N;
+                    double ref_vel = ego_car.get_v_abs();
 
+                    for (int i = 1; i < NUM_TIME_STEPS - prev_size; i++) {
+
+                        // perform acceleration or deceleration
+                        ref_vel += speed_diff;
+
+                        // check if speed is in range [0, 50 mph]
+                        ref_vel = std::max(std::min(ref_vel, SPEED_LIMIT), 0.0);
+
+                        // get x- and y-value in local coordinate system
+                        N = target_dist / (TIME_STEP_SIZE * ref_vel);
+                        x_point = x_add_on + target_x / N;
+                        y_point = spline_(x_point);
+
+                        // save current x-distance for next iteration
                         x_add_on = x_point;
 
-                        double x_ref = x_point;
-                        double y_ref = y_point;
-
+                        // convert back to global coordinates
+                        x_ref = x_point;
+                        y_ref = y_point;
                         x_point = x_ref * cos(angle) - y_ref * sin(angle);
                         y_point = x_ref * sin(angle) + y_ref * cos(angle);
-
                         x_point += pos_x;
                         y_point += pos_y;
 
