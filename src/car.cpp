@@ -4,10 +4,40 @@
 
 #include "car.h"
 #include "constants.h"
+#include "spline.h"
 
 #include <iostream>
 #include <algorithm>
 #include <omp.h>
+#include <math.h>
+
+// Transform from Frenet s,d coordinates to Cartesian x,y
+std::vector<double> getXY(double s, double d, const std::vector<double> &maps_s,
+                          const std::vector<double> &maps_x,
+                          const std::vector<double> &maps_y) {
+    int prev_wp = -1;
+
+    while (s > maps_s[prev_wp + 1] && (prev_wp < (int) (maps_s.size() - 1))) {
+        ++prev_wp;
+    }
+
+    int wp2 = (prev_wp + 1) % maps_x.size();
+
+    double heading = atan2((maps_y[wp2] - maps_y[prev_wp]),
+                           (maps_x[wp2] - maps_x[prev_wp]));
+    // the x,y,s along the segment
+    double seg_s = (s - maps_s[prev_wp]);
+
+    double seg_x = maps_x[prev_wp] + seg_s * cos(heading);
+    double seg_y = maps_y[prev_wp] + seg_s * sin(heading);
+
+    double perp_heading = heading - M_PI / 2;
+
+    double x = seg_x + d * cos(perp_heading);
+    double y = seg_y + d * sin(perp_heading);
+
+    return {x, y};
+}
 
 void Car::determineLane() {
     if (d_ > 0 && d_ < 4) {
@@ -71,7 +101,7 @@ Car::behaviourPlanner(size_t const &prev_size, std::vector <std::vector<double>>
         could_change_right = false;
     }
 
-    #pragma omp parallel for schedule(guided) num_threads(OPEN_MP_NUM_THREADS) \
+#pragma omp parallel for schedule(guided) num_threads(OPEN_MP_NUM_THREADS) \
                     reduction(&&, could_change_left) reduction(&&, could_change_right) reduction(||, car_ahead_dangerous) \
                     reduction(||, car_ahead) reduction(||, car_in_front_right) reduction(||, car_in_front_left) \
                     reduction(min, car_ahead_dist) reduction(min, car_in_front_right_dist) \
@@ -216,5 +246,119 @@ Car::behaviourPlanner(size_t const &prev_size, std::vector <std::vector<double>>
         }
     }
 
-    return std::make_tuple(next_lane, car_ahead_dangerous);;
+    return std::make_tuple(next_lane, car_ahead_dangerous);
+}
+
+std::tuple <std::vector<double>, std::vector<double>>
+Car::generateTrajectory(Lane const &next_lane, bool const &car_ahead_dangerous,
+                        std::vector<double> const &previous_path_x, std::vector<double> const &previous_path_y,
+                        std::vector<double> &ptsx, std::vector<double> &ptsy,
+                        std::vector<double> const &map_waypoints_x,
+                        std::vector<double> const &map_waypoints_y,
+                        std::vector<double> const &map_waypoints_s) {
+
+    size_t prev_size = previous_path_x.size();
+    double pos_x = ptsx.back();
+    double pos_y = ptsy.back();
+
+    bool changed_lane = next_lane != this->get_current_lane();
+
+    // adjust speed
+    double speed_diff = 0;
+    if (car_ahead_dangerous && !changed_lane) {
+        speed_diff -= MAX_ABS_ACC_EGO_VEHICLE;
+    } else {
+        if (this->get_v_abs() < SPEED_LIMIT) {
+            speed_diff += MAX_ABS_ACC_EGO_VEHICLE;
+        }
+    }
+
+    // Setting up target points in the future.
+    std::vector<double> next_wp0 = getXY(this->get_s() + 30, 2 + 4 * int(next_lane), map_waypoints_s,
+                                         map_waypoints_x,
+                                         map_waypoints_y);
+    std::vector<double> next_wp1 = getXY(this->get_s() + 40, 2 + 4 * int(next_lane), map_waypoints_s,
+                                         map_waypoints_x,
+                                         map_waypoints_y);
+    std::vector<double> next_wp2 = getXY(this->get_s() + 50, 2 + 4 * int(next_lane), map_waypoints_s,
+                                         map_waypoints_x,
+                                         map_waypoints_y);
+    std::vector<double> next_wp3 = getXY(this->get_s() + 60, 2 + 4 * int(next_lane), map_waypoints_s,
+                                         map_waypoints_x,
+                                         map_waypoints_y);
+
+    ptsx.emplace_back(next_wp0[0]);
+    ptsx.emplace_back(next_wp1[0]);
+    ptsx.emplace_back(next_wp2[0]);
+    ptsx.emplace_back(next_wp3[0]);
+
+    ptsy.emplace_back(next_wp0[1]);
+    ptsy.emplace_back(next_wp1[1]);
+    ptsy.emplace_back(next_wp2[1]);
+    ptsy.emplace_back(next_wp3[1]);
+
+    // convert coordinates to local car coordinates.
+    for (int i = 0; i < ptsx.size(); i++) {
+        double shift_x = ptsx[i] - pos_x;
+        double shift_y = ptsy[i] - pos_y;
+
+        ptsx[i] = shift_x * cos(0 - this->get_angle()) - shift_y * sin(0 - this->get_angle());
+        ptsy[i] = shift_x * sin(0 - this->get_angle()) + shift_y * cos(0 - this->get_angle());
+    }
+
+
+    std::vector<double> next_x_vals;
+    next_x_vals.reserve(NUM_TIME_STEPS);
+
+    std::vector<double> next_y_vals;
+    next_y_vals.reserve(NUM_TIME_STEPS);
+
+    // use path points from previous path for continuity
+    next_x_vals.insert(std::end(next_x_vals), std::begin(previous_path_x), std::end(previous_path_x));
+    next_y_vals.insert(std::end(next_y_vals), std::begin(previous_path_y), std::end(previous_path_y));
+
+
+    // create the spline.
+    tk::spline spline_;
+    spline_.set_points(ptsx, ptsy);
+
+    // Calculate distance y position on 30 m ahead.
+    double target_x = 30.0;
+    double target_y = spline_(target_x);
+    double target_dist = sqrt(target_x * target_x + target_y * target_y);
+
+    double x_add_on = 0;
+
+    double x_ref, y_ref, x_point, y_point, N;
+    double ref_vel = this->get_v_abs();
+
+    for (int i = 1; i < NUM_TIME_STEPS - prev_size; i++) {
+
+        // perform acceleration or deceleration
+        ref_vel += speed_diff;
+
+        // check if speed is in range [0, 50 mph]
+        ref_vel = std::max(std::min(ref_vel, SPEED_LIMIT), 0.0);
+
+        // get x- and y-value in local coordinate system
+        N = target_dist / (TIME_STEP_SIZE * ref_vel);
+        x_point = x_add_on + target_x / N;
+        y_point = spline_(x_point);
+
+        // save current x-distance for next iteration
+        x_add_on = x_point;
+
+        // convert back to global coordinates
+        x_ref = x_point;
+        y_ref = y_point;
+        x_point = x_ref * cos(this->get_angle()) - y_ref * sin(this->get_angle());
+        y_point = x_ref * sin(this->get_angle()) + y_ref * cos(this->get_angle());
+        x_point += pos_x;
+        y_point += pos_y;
+
+        next_x_vals.emplace_back(x_point);
+        next_y_vals.emplace_back(y_point);
+    }
+
+    return std::make_tuple(next_x_vals, next_y_vals);
 }

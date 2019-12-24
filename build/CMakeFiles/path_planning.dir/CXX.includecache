@@ -777,11 +777,15 @@ car.h
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.h
 constants.h
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/constants.h
+spline.h
+/mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/spline.h
 iostream
 -
 algorithm
 -
 omp.h
+-
+math.h
 -
 
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.h
@@ -877,8 +881,6 @@ helpers.h
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/helpers.h
 json.hpp
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/json.hpp
-spline.h
-/mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/spline.h
 constants.h
 /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/constants.h
 car.h

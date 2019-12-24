@@ -27,12 +27,13 @@ public:
         current_lane_ = unknown;
     }
 
-    Car(double s, double s_d, double d, double d_d, double v_abs) {
+    Car(double s, double s_d, double d, double d_d, double v_abs, double angle) {
         s_ = s;
         s_d_ = s_d;
         d_ = d;
         d_d_ = d_d;
         v_abs_ = v_abs;
+        angle_ = angle;
         current_lane_ = unknown;
     }
 
@@ -52,6 +53,8 @@ public:
 
     double get_v_abs() const { return v_abs_; }
 
+    double get_angle() const { return angle_; }
+
     /* member functions */
 
     // determine current lane based on d value in frenet coordinate system
@@ -64,6 +67,14 @@ public:
     std::tuple<Lane, bool> behaviourPlanner(size_t const &prev_size,
                                             std::vector <std::vector<double>> const &sensor_fusion);
 
+    std::tuple <std::vector<double>, std::vector<double>>
+    generateTrajectory(Lane const &next_lane, bool const &car_ahead_dangerous,
+                       std::vector<double> const &previous_path_x, std::vector<double> const &previous_path_y,
+                       std::vector<double> &ptsx, std::vector<double> &ptsy,
+                       std::vector<double> const &map_waypoints_x,
+                       std::vector<double> const &map_waypoints_y,
+                       std::vector<double> const &map_waypoints_s);
+
 private:
 
     double s_;
@@ -73,6 +84,8 @@ private:
     double d_d_;
 
     double v_abs_;
+    double angle_;
+
     Lane current_lane_;
 };
 

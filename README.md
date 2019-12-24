@@ -8,9 +8,9 @@
 * [Getting Started](#getting-started)
   * [Prerequisites](#prerequisites)
   * [Installation](#installation)
-* [Simulator Description](#simulator-description)
 * [Structure](#structure)
-* [Usage](#usage)
+* [Simulator Description](#simulator-description)
+* [Reflection](#usage)
 * [Contributing](#contributing)
 * [License](#license)
 * [Contact](#contact)
@@ -18,13 +18,13 @@
 
 [//]: # (Image References)
 
-[image1]: ./examples/straight_lines1_final.jpg
+[image1]: ./imgs/project-pic.PNG
 
 
 About the Project
 ---
 
-In this project the goal is to safely navigate around a virtual highway with other traffic that is driving +-10 MPH of the 50 MPH speed limit.
+In this project the goal is to safely navigate around a virtual highway with other traffic participants. Furthermore, it is desired that jerk is minimized and other traffic participants are not endangered.
 
 ![alt text][image1]
 
@@ -32,7 +32,7 @@ In this project the goal is to safely navigate around a virtual highway with oth
 <!-- GETTING STARTED -->
 ## Getting Started
 
-The software is written in Python 3.7 and tested on Linux. The usage of the Miniconda Python distribution is strongly recommended.
+The software is written in C++17 and tested on Linux.
 
 ### Prerequisites
 
@@ -63,7 +63,7 @@ The software is written in Python 3.7 and tested on Linux. The usage of the Mini
 4. Run it: `./path_planning`.
 
 <!-- STRUCTURE -->
-## STRUCTURE
+## Structure
 The directory structure of this repository is as follows:
 ```
 root
@@ -140,8 +140,34 @@ the path has processed since last time.
 
 ["sensor_fusion"] A 2d vector of cars and then that car's [car's unique ID, car's x position in map coordinates, car's y position in map coordinates, car's x velocity in m/s, car's y velocity in m/s, car's s position in frenet coordinates, car's d position in frenet coordinates. 
 
-<!-- USAGE EXAMPLES -->
-## Usage
+<!-- REFLECTION -->
+## Reflection
+
+Based on the provided code, the trajectory generation is divided into three steps:
+
+#### [Prediction](./src/main.cpp#L54)
+
+In order to plan a safe trajectory, we have to know where other traffic participants could be in the future. Therefore,
+based on the current state of these traffic participants, the set of possible future states is calculated.
+
+The closest travelled distance is calculated with maximum deceleration of 10 m/s^2 and the furthest travelled distance with a maximum acceleration of 10m/s^2 respectively. For these values we use a maximum velocity of 60 mph and minimum velcoity of 0 mph.
+Moreover, it is assumed that the cars stay in their lane for this time horizon of 0.5 seconds.
+
+The closest and furthest travelled distance span a region which is possibly occupied by a traffic participants.
+
+#### [Behaviour Planner](./src/car.cpp#L76)
+
+Based on the predictions and the current state of the ego vehicle a high-level action is determined. The ego vehicle
+prioritizes to drive in its current lane but changes lane if the lane to the left or right has more free space in driving direction.
+
+Since we do not want to endanger other traffic participants we keep a safe distance of `s = 0.55 * v`. Where `v` is the velocity in km/h. This is a rule of thumb by the german traffic law.
+
+#### [Trajectory Generation](./src/car.cpp#L252)
+
+This part does the calculation of the trajectory based on the speed and the result from the behavior planner, car coordinates and past path points.
+
+To make the work less complicated, coordinates are transformed to local car coordinates. Based on the result of the behaviour planner a path is planned in frenet coordinates with four supportive points.
+This frenet path is converted to local x- and y-coordinates. To generate a smooth trajectory spline is used. Based on this spline points are sampled in in a distance of 0.02 seconds. Moreover we perform acceleration and deceleration. Usually we are trying to accelerate until we have reached the speed limit of the lane of 50 mph. Nevertheless, if a car is dangerously close in front of the ego vehicle we decelerate. 
 
 
 <!-- CONTRIBUTING -->
@@ -155,12 +181,12 @@ Contributions are what make the open source community such an amazing place to b
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-Please (do your best to) stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
+Please stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
 
 <!-- LICENSE -->
 ## License
 
-Distributed under the MIT License.
+Distributed under the MIT License. Further information can be found in the _LICENSE_ file.
 
 <!-- CONTACT -->
 ## Contact
@@ -168,10 +194,4 @@ Distributed under the MIT License.
 Sebastian Kaster - sebastiankaster@googlemail.com
 
 Project Link: [https://github.com/sebkaster/CarND-Path-Planning-Project](https://github.com/sebkaster/CarND-Path-Planning-Project)
-
-
-   
-## Tips
-
-A really helpful resource for doing this project and creating smooth trajectories was using http://kluge.in-chemnitz.de/opensource/spline/, the spline function is in a single hearder file is really easy to use.
 

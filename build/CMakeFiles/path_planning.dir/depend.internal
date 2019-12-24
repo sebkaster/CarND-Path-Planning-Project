@@ -5,6 +5,7 @@ CMakeFiles/path_planning.dir/src/car.cpp.o
  /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.cpp
  /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/car.h
  /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/constants.h
+ /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/spline.h
 CMakeFiles/path_planning.dir/src/main.cpp.o
  /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/Cholesky
  /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/Eigen-3.3/Eigen/Core
@@ -169,4 +170,3 @@ CMakeFiles/path_planning.dir/src/main.cpp.o
  /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/helpers.h
  /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/json.hpp
  /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/main.cpp
- /mnt/c/Users/sebas/Documents/git_projects/CarND-Path-Planning-Project/src/spline.h
